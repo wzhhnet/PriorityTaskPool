@@ -87,6 +87,5 @@ int main(int argc, char **argv)
     std::cout << "*>" << f3.get() << std::endl;
     std::cout << "/>" << f4.get() << std::endl;
 
-    sleep(1);
     return 0;
 }
