@@ -25,61 +25,75 @@
 #include <thread>
 #include <future>
 #include <functional>
+#if __cplusplus >= 201703L
+#include <type_traits>
+#endif
 #include <condition_variable>
 
-namespace utils {
+namespace utils
+{
+
+template <class F, class... Args>
+#if __cplusplus >= 201703L
+using TaskResult = std::invoke_result<F, Args...>;
+#elif __cplusplus >= 201103L
+using TaskResult = std::result_of<F(Args...)>;
+#else
+#error "c++11 or higher version must be supported"
+#endif
 
 using Task = std::function<void()>;
 using Priority = uint8_t; // Greater number is higher priority
-
-/// Task unit managed in the task pool
-class TaskUnit final {
+/// Forward Declaration
+class TaskUnit;
+/// @brief task pool class
+class TaskPool final
+{
   public:
-    TaskUnit();
-    TaskUnit(const Task& task, Priority priority);
-    TaskUnit(Task&& task, Priority priority);
-    TaskUnit(const TaskUnit& other);
-    TaskUnit(TaskUnit&& other);
-    ~TaskUnit();
-    TaskUnit& operator=(const TaskUnit& other);
-    TaskUnit& operator=(TaskUnit&& other);
-    bool operator<(const TaskUnit& other) const;
-    void operator()() const;
-
-  private:
-    Task task_;
-    Priority priority_;
-    int64_t timestamp_;
-};
-
-class TaskPool final {
-  public:
+    /// @brief constructor
+    /// @param threads number of threads
     TaskPool(size_t threads);
+
+    /// @brief de-constructor
     ~TaskPool();
+
+    /// @brief number of pending tasks
+    /// @return number of pending tasks
     size_t size();
 
+    /// @brief add a callable object to task pool
+    /// @tparam F type of callable object
+    /// @tparam ...Args type of arguments list
+    /// @param pri calling priority
+    /// @param f callable object, maybe function, member function or lambda
+    /// @param ...args  arguments list
+    /// @return function returning value
     template <class F, class... Args>
-    auto enqueue(Priority pri, F&& f, Args&&... args) -> std::future<typename std::result_of<F(Args...)>::type>
+    auto enqueue(Priority pri, F &&f, Args &&...args)
+        -> std::future<typename TaskResult<F, Args...>::type>
     {
         // typedef returning type
-        using return_type = typename std::result_of<F(Args...)>::type;
+        using return_type = typename TaskResult<F, Args...>::type;
         // bind type of F to task
         auto package = std::make_shared<std::packaged_task<return_type()>>(
             std::bind(std::forward<F>(f), std::forward<Args>(args)...));
         std::future<return_type> res = package->get_future();
-        {
-            Task task = [package]() -> void { (*package)(); };
-            std::unique_lock<std::mutex> lock(mutex_);
-            tasks_.emplace(std::move(task), pri);
-        }
-        cond_.notify_one();
+        AddTask([package]() -> void { (*package)(); }, pri);
         return res;
     }
 
-private:
+  private:
+    /// @brief invoke pending task
+    /// @return true if continue to invoke next pending task
+    ///         false if task pool is stopped
     bool DoTask();
 
-private:
+    /// @brief add a packed task to pending queue
+    /// @param task packed task
+    /// @param pri priority of task
+    void AddTask(Task &&task, Priority pri);
+
+  private:
     using TaskQueue = std::priority_queue<TaskUnit>;
     std::vector<std::thread> workers_;
     TaskQueue tasks_;
@@ -88,4 +102,5 @@ private:
     bool stop_;
 };
 
-}
+} // namespace utils
+

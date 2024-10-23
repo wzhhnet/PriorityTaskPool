@@ -4,6 +4,7 @@ project(ptpl LANGUAGES C CXX)
 
 option (ENABLE_TEST "option for test" OFF)
 
+#set(CMAKE_CXX_STANDARD 17)
 add_library(${PROJECT_NAME} STATIC priority_task_pool.cc)
 
 if (${ENABLE_TEST})

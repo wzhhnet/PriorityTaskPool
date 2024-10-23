@@ -80,12 +80,16 @@ int main(int argc, char **argv)
     auto f3 = tp.enqueue(1, &MulFunc::mul, &mf, 2, 3);
     auto f4 = tp.enqueue(1, divfunc, 8, 2);
 
-    sleep(1);
+    int r1 = f1.get();
+    int r2 = f2.get();
+    int r3 = f3.get();
+    int r4 = f4.get();
+
     std::cout << "====================" << std::endl;
-    std::cout << "+>" << f1.get() << std::endl;
-    std::cout << "->" << f2.get() << std::endl;
-    std::cout << "*>" << f3.get() << std::endl;
-    std::cout << "/>" << f4.get() << std::endl;
+    std::cout << "+>" << r1 << std::endl;
+    std::cout << "->" << r2 << std::endl;
+    std::cout << "*>" << r3 << std::endl;
+    std::cout << "/>" << r4 << std::endl;
 
     return 0;
 }
