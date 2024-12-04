@@ -76,15 +76,13 @@ class TaskPool final
 #if __cplusplus >= 202002L // C++20 Perfect forward by "pack init-capture"
         auto task = [f = std::forward<F>(f),
                      ... args = std::forward<Args>(args)]() mutable {
-            AVX_RETURN_IF(true, std::invoke(f, std::forward<Args>(args)...),
-                          AVX_VOID);
+            return std::invoke(f, std::forward<Args>(args)...);
         };
 #elif __cplusplus >= 201703L // C++17 Perfect forward by std::tuple
         auto task =
             [f = std::forward<F>(f),
              args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
-                AVX_RETURN_IF(true, std::apply(std::move(f), std::move(args)),
-                              AVX_VOID);
+                return std::apply(std::move(f), std::move(args));
             };
 #else // C++11 Only copy args... type of rvalue-ref can not passed compiling.
         auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
