@@ -35,9 +35,9 @@ namespace utils
 
 template <class F, class... Args>
 #if __cplusplus >= 201703L
-using TaskResult = std::invoke_result<F, Args...>;
+using ReturnType = typename std::invoke_result<F, Args...>::type;
 #elif __cplusplus >= 201103L
-using TaskResult = std::result_of<F(Args...)>;
+using ReturnType = typename std::result_of<F(Args...)>::type;
 #else
 #error "c++11 or higher version must be supported"
 #endif
@@ -69,16 +69,30 @@ class TaskPool final
     /// @param ...args  arguments list
     /// @return function returning value
     template <class F, class... Args>
-    auto enqueue(Priority pri, F &&f, Args &&...args)
-        -> std::future<typename TaskResult<F, Args...>::type>
+    auto enqueue(Priority pri, F &&f,
+		 Args &&...args) -> std::future<ReturnType<F, Args...>>
     {
-        // typedef returning type
-        using return_type = typename TaskResult<F, Args...>::type;
-        // bind type of F to task
-        auto package = std::make_shared<std::packaged_task<return_type()>>(
-            std::bind(std::forward<F>(f), std::forward<Args>(args)...));
-        std::future<return_type> res = package->get_future();
-        AddTask([package]() -> void { (*package)(); }, pri);
+        using Rtype = ReturnType<F, Args...>;
+#if __cplusplus >= 202002L // C++20 Perfect forward by "pack init-capture"
+        auto task = [f = std::forward<F>(f),
+                     ... args = std::forward<Args>(args)]() mutable {
+            AVX_RETURN_IF(true, std::invoke(f, std::forward<Args>(args)...),
+                          AVX_VOID);
+        };
+#elif __cplusplus >= 201703L // C++17 Perfect forward by std::tuple
+        auto task =
+            [f = std::forward<F>(f),
+             args = std::make_tuple(std::forward<Args>(args)...)]() mutable {
+                AVX_RETURN_IF(true, std::apply(std::move(f), std::move(args)),
+                              AVX_VOID);
+            };
+#else // C++11 Only copy args... type of rvalue-ref can not passed compiling.
+        auto task = std::bind(std::forward<F>(f), std::forward<Args>(args)...);
+#endif
+        auto pkg =
+            std::make_shared<std::packaged_task<Rtype()>>(std::move(task));
+        std::future<Rtype> res = pkg->get_future();
+        AddTask([pkg]() -> void { (*pkg)(); }, pri);
         return res;
     }
 
